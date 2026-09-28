@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Eye, X, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
+import { Eye, X, ChevronLeft, ChevronRight, Maximize2, ArrowLeft } from 'lucide-react';
 
 interface GalleryItem {
   id: string;
@@ -67,23 +67,51 @@ export default function GallerySection() {
     ? galleryItems
     : galleryItems.filter((item) => item.category === activeCategory);
 
+  const closeLightbox = useCallback(() => {
+    setActiveLightboxIndex(null);
+  }, []);
+
+  const nextLightbox = useCallback(() => {
+    setActiveLightboxIndex((curr) => {
+      if (curr === null) return null;
+      return (curr + 1) % filteredItems.length;
+    });
+  }, [filteredItems.length]);
+
+  const prevLightbox = useCallback(() => {
+    setActiveLightboxIndex((curr) => {
+      if (curr === null) return null;
+      return (curr - 1 + filteredItems.length) % filteredItems.length;
+    });
+  }, [filteredItems.length]);
+
   const openLightbox = (index: number) => {
     setActiveLightboxIndex(index);
   };
 
-  const closeLightbox = () => {
-    setActiveLightboxIndex(null);
-  };
+  // Lock body scroll when lightbox is open
+  useEffect(() => {
+    if (activeLightboxIndex !== null) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [activeLightboxIndex]);
 
-  const nextLightbox = () => {
+  // Keyboard navigation
+  useEffect(() => {
     if (activeLightboxIndex === null) return;
-    setActiveLightboxIndex((activeLightboxIndex + 1) % filteredItems.length);
-  };
-
-  const prevLightbox = () => {
-    if (activeLightboxIndex === null) return;
-    setActiveLightboxIndex((activeLightboxIndex - 1 + filteredItems.length) % filteredItems.length);
-  };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowRight') nextLightbox();
+      if (e.key === 'ArrowLeft') prevLightbox();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeLightboxIndex, closeLightbox, nextLightbox, prevLightbox]);
 
   return (
     <section id="gallery" className="relative py-20 lg:py-28 bg-zinc-950 border-t border-zinc-900">
@@ -165,33 +193,64 @@ export default function GallerySection() {
 
         {/* Lightbox Modal */}
         {activeLightboxIndex !== null && (
-          <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
-            <button
-              onClick={closeLightbox}
-              className="absolute top-6 right-6 p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 z-50"
-              aria-label="Close Lightbox"
+          <div
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col justify-between overflow-y-auto animate-fadeIn"
+            onClick={closeLightbox}
+          >
+            {/* Top Bar for Lightbox */}
+            <div
+              className="sticky top-0 left-0 right-0 z-30 w-full bg-zinc-950/95 border-b border-zinc-800/90 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-2xl backdrop-blur-md"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="w-6 h-6" />
-            </button>
+              <button
+                onClick={closeLightbox}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs uppercase tracking-wider border border-zinc-700 hover:border-red-600 transition-all cursor-pointer shadow-md"
+              >
+                <ArrowLeft className="w-4 h-4 text-red-500" />
+                <span>Back to Gallery</span>
+              </button>
 
-            <button
-              onClick={prevLightbox}
-              className="absolute left-4 sm:left-8 p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-700 z-50"
-              aria-label="Previous image"
+              <div className="text-center">
+                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                  Photo {activeLightboxIndex + 1} of {filteredItems.length}
+                </span>
+              </div>
+
+              <button
+                onClick={closeLightbox}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-red-950/60"
+                aria-label="Close Lightbox Preview"
+              >
+                <X className="w-4 h-4" />
+                <span className="hidden sm:inline">Close</span>
+              </button>
+            </div>
+
+            {/* Center Area */}
+            <div
+              className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 flex flex-col items-center justify-center relative my-auto"
+              onClick={(e) => e.stopPropagation()}
             >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
+              {/* Previous Button */}
+              <button
+                onClick={prevLightbox}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-white border border-zinc-700 hover:border-red-600 shadow-xl transition-all cursor-pointer"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
 
-            <button
-              onClick={nextLightbox}
-              className="absolute right-4 sm:right-8 p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white border border-zinc-700 z-50"
-              aria-label="Next image"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
+              {/* Next Button */}
+              <button
+                onClick={nextLightbox}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-white border border-zinc-700 hover:border-red-600 shadow-xl transition-all cursor-pointer"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
 
-            <div className="max-w-4xl w-full max-h-[85vh] flex flex-col items-center">
-              <div className="relative w-full aspect-[16/10] max-h-[70vh] rounded-2xl overflow-hidden border border-zinc-800">
+              {/* Image Preview */}
+              <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[60vh] sm:max-h-[68vh] rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl bg-zinc-950">
                 <Image
                   src={filteredItems[activeLightboxIndex].image}
                   alt={filteredItems[activeLightboxIndex].title}
@@ -200,18 +259,34 @@ export default function GallerySection() {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <div className="mt-4 text-center">
-                <span className="text-xs font-bold text-red-500 uppercase tracking-widest">
+
+              {/* Details and Actions */}
+              <div className="mt-4 text-center max-w-2xl px-2">
+                <span className="text-xs font-bold text-red-500 uppercase tracking-widest block mb-1">
                   {filteredItems[activeLightboxIndex].category}
                 </span>
-                <h4 className="text-lg font-black uppercase text-white mt-0.5">
+                <h4 className="text-lg sm:text-xl font-black uppercase text-white tracking-tight">
                   {filteredItems[activeLightboxIndex].title}
                 </h4>
-                <p className="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto mt-1">
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
                   {filteredItems[activeLightboxIndex].desc}
                 </p>
+
+                {/* Bottom Back to Gallery Button */}
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                    onClick={closeLightbox}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-red-600 text-zinc-200 hover:text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-md"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-red-500" />
+                    <span>Back to Gallery</span>
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Spacer */}
+            <div className="h-4 sm:h-6" />
           </div>
         )}
       </div>
